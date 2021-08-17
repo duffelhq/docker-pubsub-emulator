@@ -1,0 +1,12 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '-f', 'Dockerfile',
+    '-t', 'gcr.io/$PROJECT_ID/pubsub-emulator:$COMMIT_SHA',
+    '.'
+  ]
+
+images: [
+  'gcr.io/$PROJECT_ID/pubsub-emulator:$COMMIT_SHA'
+]
