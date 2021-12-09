@@ -1,11 +1,39 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: [
-    'build',
-    '-f', 'Dockerfile',
-    '-t', 'gcr.io/$PROJECT_ID/pubsub-emulator:$COMMIT_SHA',
-    '.'
+  id: 'dockerhub-login'
+  waitFor: ['-']
+  # bash entrypoint is required in order to pass the secret environment variables
+  entrypoint: 'bash'
+  args: ['-c', 'docker login --username=$$DOCKERHUB_USERNAME --password=$$DOCKERHUB_PASSWORD']
+  secretEnv: ['DOCKERHUB_USERNAME', 'DOCKERHUB_PASSWORD']
+
+- name: 'gcr.io/cloud-builders/docker'
+  id: 'deploy-scripts-build'
+  waitFor: ['-']
+  # bash entrypoint is required in order to pass the secret environment variables
+  entrypoint: 'bash'
+  # NOTE: This is tagging twice. This allows us to push to GCR which is our source of truth, and DockerHub for lower cost use in CircleCI
+  args: ['-c', 'docker build --tag $$DOCKERHUB_USERNAME/pubsub-emulator:$COMMIT_SHA --tag gcr.io/$PROJECT_ID/pubsub-emulator:$COMMIT_SHA --file Dockerfile .']
+  secretEnv: ['DOCKERHUB_USERNAME']
+
+- name: 'gcr.io/cloud-builders/docker'
+  waitFor: [
+    'dockerhub-login',
+    'deploy-scripts-build',
   ]
+  # bash entrypoint is required in order to pass the secret environment variables
+  entrypoint: 'bash'
+  # NOTE: The `images` list below is a built in push to GCR. We need to manually push to DockerHub.
+  args: ['-c', 'docker push $$DOCKERHUB_USERNAME/pubsub-emulator:$COMMIT_SHA']
+  secretEnv: ['DOCKERHUB_USERNAME']
+
+availableSecrets:
+  secretManager:
+  # These cloudbuild secrets are managed with atc with config https://github.com/duffelhq/terraform/blob/main/.atc/config-cloudbuild.yaml
+  - versionName: projects/duffel-shared/secrets/cloudbuild-dockerhub-READ_WRITE_TOKEN/versions/1
+    env: 'DOCKERHUB_PASSWORD'
+  - versionName: projects/duffel-shared/secrets/cloudbuild-dockerhub-USERNAME/versions/1
+    env: 'DOCKERHUB_USERNAME'
 
 images: [
   'gcr.io/$PROJECT_ID/pubsub-emulator:$COMMIT_SHA'
